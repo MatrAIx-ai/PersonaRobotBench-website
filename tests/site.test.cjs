@@ -150,7 +150,7 @@ test('one filled video slot reports partial availability', async () => {
 });
 
 test('GitHub Pages project subpaths preserve catalog, image, font CSS, script and video URLs', async () => {
-  const base = 'https://hhd000exe.github.io/PersonaRobotBench-website/';
+  const base = 'https://matraix-ai.github.io/PersonaRobotBench-website/';
   const filled = structuredClone(examples);
   filled[0].personas[0].video = 'assets/rollouts/task18-A.mp4';
   const ctx = await boot({ url: base, examples: filled });
@@ -255,8 +255,8 @@ test('fetch failures leave repository links and clear fallback state', async () 
   const ctx = await boot({ fetchError: true });
   assert.equal(ctx.ready, false);
   assert.ok(ctx.$('#task-count').textContent.includes('unavailable'));
-  assert.equal(ctx.$('#task-grid a').href, 'https://github.com/HHD000EXE/PersonaRobotBench-website/blob/website/data/tasks.json');
+  assert.equal(ctx.$('#task-grid a').href, 'https://github.com/MatrAIx-ai/PersonaRobotBench-website/blob/website/data/tasks.json');
   assert.ok(ctx.$('#rollout-pair').textContent.includes('Recorded rollouts are unavailable'));
-  assert.equal(ctx.$('#rollout-pair a').href, 'https://github.com/HHD000EXE/PersonaRobotBench-website/tree/website/assets/rollouts');
+  assert.equal(ctx.$('#rollout-pair a').href, 'https://github.com/MatrAIx-ai/PersonaRobotBench-website/tree/website/assets/rollouts');
   ctx.window.close();
 });

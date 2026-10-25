@@ -2,7 +2,7 @@
 
 The public research website for the **100-task / 217-persona** benchmark.
 
-- **Live website:** https://hhd000exe.github.io/PersonaRobotBench-website/
+- **Live website:** https://matraix-ai.github.io/PersonaRobotBench-website/
 - **Contribute:** fork this repository and open a pull request targeting **`website`**.
 - **Contribution guide:** [CONTRIBUTING.md](CONTRIBUTING.md)
 - **Benchmark:** [HHD000EXE/PersonaRobotBench](https://github.com/HHD000EXE/PersonaRobotBench), currently private. Its code and linked technical guides require repository access.
@@ -18,7 +18,7 @@ recording context and the historical Task 110 → Task 51 mapping.
 ## Local preview
 
 ~~~bash
-git clone --branch website https://github.com/HHD000EXE/PersonaRobotBench-website.git
+git clone --branch website https://github.com/MatrAIx-ai/PersonaRobotBench-website.git
 cd PersonaRobotBench-website
 python3 -m http.server 8080
 ~~~
@@ -103,11 +103,11 @@ the private benchmark checkout.
 
 ## Branch ownership
 
-`HHD000EXE/PersonaRobotBench-website:website` is the public contribution and
-deployment source. The original benchmark repository also has a `website`
-branch containing the initial website snapshot. That private snapshot is not an
-automatic mirror: maintainers should bring future public website changes into
-it explicitly when needed. Do not merge the website branch into benchmark `main`.
+`MatrAIx-ai/PersonaRobotBench-website:website` is the public contribution and
+deployment source. The organization benchmark repository `MatrAIx-ai/PersonaRobotBench` also has a
+`website` branch. That private source branch is not an automatic mirror:
+maintainers should bring future public website changes into it explicitly when
+needed. Do not merge the website branch into benchmark `main`.
 
 This website has no backend, analytics, model calls or simulator processes.
 Keep API keys, credentials, local outputs and runtime files outside this repository.

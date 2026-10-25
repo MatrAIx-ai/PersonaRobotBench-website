@@ -2,7 +2,7 @@
 
 Website improvements are welcome: copy corrections, accessibility, responsive
 layout, task browsing, accurate catalog updates, and real simulation recordings.
-Open issues and PRs in **HHD000EXE/PersonaRobotBench-website**. Benchmark task,
+Open issues and PRs in **MatrAIx-ai/PersonaRobotBench-website**. Benchmark task,
 controller, or evaluator changes belong in the benchmark repository.
 
 ## Make a change
@@ -18,7 +18,7 @@ controller, or evaluator changes belong in the benchmark repository.
 
 3. Preview with `python3 -m http.server 8080` and edit the source files.
 4. Run the checks below, commit, and push your working branch.
-5. Open a PR with **base repository `HHD000EXE/PersonaRobotBench-website`** and
+5. Open a PR with **base repository `MatrAIx-ai/PersonaRobotBench-website`** and
    **base branch `website`**. Describe the change and include screenshots for
    visible layout changes when available.
 

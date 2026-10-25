@@ -254,8 +254,8 @@
       return true;
     } catch {
       $("#task-count").textContent = "The interactive catalog is unavailable.";
-      $("#task-grid").innerHTML = '<div class="empty-state"><p>Please serve this site over HTTP, or browse the public task catalog on GitHub.</p><a class="text-link" href="https://github.com/HHD000EXE/PersonaRobotBench-website/blob/website/data/tasks.json" target="_blank" rel="noopener noreferrer">Browse the public task catalog ↗</a></div>';
-      $("#rollout-pair").innerHTML = '<div class="empty-state">Recorded rollouts are unavailable. <a href="https://github.com/HHD000EXE/PersonaRobotBench-website/tree/website/assets/rollouts" target="_blank" rel="noopener noreferrer">View or download the videos on GitHub.</a></div>';
+      $("#task-grid").innerHTML = '<div class="empty-state"><p>Please serve this site over HTTP, or browse the public task catalog on GitHub.</p><a class="text-link" href="https://github.com/MatrAIx-ai/PersonaRobotBench-website/blob/website/data/tasks.json" target="_blank" rel="noopener noreferrer">Browse the public task catalog ↗</a></div>';
+      $("#rollout-pair").innerHTML = '<div class="empty-state">Recorded rollouts are unavailable. <a href="https://github.com/MatrAIx-ai/PersonaRobotBench-website/tree/website/assets/rollouts" target="_blank" rel="noopener noreferrer">View or download the videos on GitHub.</a></div>';
       return false;
     }
   }
