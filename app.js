@@ -4,7 +4,9 @@
 
   const FEATURED = [18, 51, 68, 87, 32, 91];
   const PAGE_SIZE = 6;
-  const state = { tasks: [], examples: [], category: "All", query: "", visible: PAGE_SIZE, activeExample: 18 };
+  const RATES = [1, 2, 4, 8];
+  const SKIP_SECONDS = 5;
+  const state = { tasks: [], examples: [], category: "All", query: "", visible: PAGE_SIZE, activeExample: 18, rate: 1 };
   const $ = (selector, scope = document) => scope.querySelector(selector);
   const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)];
   const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
@@ -46,10 +48,8 @@
       : schematic(task.id);
     const dots = task.personaIds.map((id, index) => '<span class="persona-pill ' + (index % 2 ? "persona-b-color" : "persona-a-color") + '">' + escape(id) + '</span>').join("");
     return '<article class="task-card"><button class="task-card-button" type="button" data-task="' + task.id + '" aria-label="View Task ' + task.id + ': ' + escape(titleFor(task)) + ', ' + task.personaCount + ' persona cases"><div class="task-image">' + figure +
-      '<span class="task-number">TASK ' + padded(task.id) + '</span><span class="task-preview-label">' + (poster ? "INITIAL SCENE" : "TASK SPECIFICATION") +
-      '</span></div><div class="task-card-body"><div class="task-card-heading"><h3>' + escape(titleFor(task)) + '</h3><span class="task-card-arrow" aria-hidden="true">↗</span></div><p>“' + escape(task.instruction) +
-      '”</p><div class="task-card-footer"><span class="category">' + escape(task.category) + '</span><span class="persona-dots" aria-label="' + task.personaCount + ' persona cases">' + dots + '<span>' +
-      task.personaCount + ' cases</span></span></div></div></button></article>';
+      '<span class="task-number">TASK ' + padded(task.id) + '</span></div><div class="task-card-body"><div class="task-card-heading"><h3>' + escape(titleFor(task)) + '</h3><span class="task-card-arrow" aria-hidden="true">↗</span></div><p>“' + escape(task.instruction) +
+      '”</p><div class="task-card-footer"><span class="category">' + escape(task.category) + '</span><span class="persona-dots" aria-label="' + task.personaCount + ' persona cases">' + dots + '</span></div></div></button></article>';
   }
 
   function renderTasks() {
@@ -108,8 +108,111 @@
       : '<div class="video-placeholder" role="img" aria-label="Video placeholder for Task ' + example.id + " persona " + escape(persona.id) +
         '"><img src="' + escape(example.poster) + '" alt="" loading="lazy" width="960" height="600"><span class="video-placeholder-label">PERSONA ' + escape(persona.id) +
         ' / SIMULATION ROLLOUT</span><div class="placeholder-center"><span class="play-outline" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m7 4 13 8-13 8Z"/></svg></span><strong>Rollout video</strong><p>COMING SOON</p></div><span class="placeholder-corner" aria-hidden="true">PRB / ' + padded(example.id) + " / " + escape(persona.id) + '</span></div>';
-    return '<div class="rollout-case">' + visual + '<div class="rollout-case-caption"><span class="persona-avatar">' + escape(persona.id) +
-      '</span><div><span class="mono small-label">PERSONA ' + escape(persona.id) + '</span><p>' + escape(persona.description) + '</p></div></div></div>';
+    return '<div class="rollout-case">' + visual + '<div class="rollout-case-caption"><span class="persona-avatar"><span class="visually-hidden">Persona </span>' + escape(persona.id) +
+      '</span><p>' + escape(persona.description) + '</p></div></div>';
+  }
+
+  function renderRolloutTabs() {
+    const recorded = state.examples.filter((example) => example.recording);
+    if (!recorded.length) return;
+    // A tile per recorded pair: a real frame from persona A's recording (or the
+    // initial scene) and the pair's label. Model recordings carry an on-screen
+    // overlay, so their tiles use the scene.
+    $(".rollout-tabs").innerHTML = recorded.map((example) => {
+      const model = example.recording.kind === "model";
+      const thumbnail = (model ? null : safeUrl(example.personas[0]?.videoPoster)) ?? safeUrl(example.poster);
+      return '<button type="button" role="tab" id="example-tab-' + example.id + '" aria-controls="rollout-panel" aria-selected="false" tabindex="-1" data-example="' +
+        example.id + '">' + (thumbnail ? '<img src="' + escape(thumbnail) + '" alt="" loading="lazy" width="160" height="100">' : "") +
+        '<span>' + escape(example.tabLabel ?? example.shortTitle) + '</span></button>';
+    }).join("");
+    $(".rollout-tabs").classList.add("rollout-tiles");
+    // Wide screens lay the tiles out in two full rows.
+    $(".rollout-tabs").style.setProperty("--tile-columns", String(Math.ceil(recorded.length / 2)));
+  }
+
+  // One control drives both personas on a shared simulation clock: the shorter
+  // recording holds its last frame while the longer one finishes.
+  function wireSync(example) {
+    const bar = $("#rollout-sync");
+    if (!bar) return;
+    const videos = $$("video", $("#rollout-pair"));
+    if (videos.length !== 2) {
+      bar.hidden = true;
+      bar.innerHTML = "";
+      return;
+    }
+    const length = Math.max(0, ...example.personas.slice(0, 2).map((persona) => persona.videoDurationSeconds || 0));
+    const playLabel = '<span aria-hidden="true">▶</span> Play A and B together';
+    const pauseLabel = '<span aria-hidden="true">❚❚</span> Pause both';
+    bar.hidden = false;
+    bar.innerHTML = '<button type="button" class="sync-play">' + playLabel + '</button>' +
+      '<button type="button" class="sync-skip" data-skip="-' + SKIP_SECONDS + '" aria-label="Back ' + SKIP_SECONDS + ' seconds">−' + SKIP_SECONDS + ' s</button>' +
+      '<input class="sync-scrub" type="range" min="0" max="1000" step="1" value="0" aria-label="Position in both recordings">' +
+      '<button type="button" class="sync-skip" data-skip="' + SKIP_SECONDS + '" aria-label="Forward ' + SKIP_SECONDS + ' seconds">+' + SKIP_SECONDS + ' s</button>' +
+      '<span class="sync-time mono">0.0 / ' + length.toFixed(1) + ' s</span>' +
+      '<div class="sync-speed" role="radiogroup" aria-label="Playback speed for both recordings">' +
+      RATES.map((rate) => '<button type="button" role="radio" data-rate="' + rate + '" aria-checked="' + (rate === state.rate) + '">' + rate + '×</button>').join("") + '</div>';
+    const play = $(".sync-play", bar);
+    const scrub = $(".sync-scrub", bar);
+    const time = $(".sync-time", bar);
+    const clock = () => Math.max(0, ...videos.map((video) => video.currentTime || 0));
+    const playing = () => videos.some((video) => !video.paused && !video.ended);
+    const finished = () => videos.every((video) => video.ended || (video.duration > 0 && video.currentTime >= video.duration - 0.05));
+    const show = () => {
+      const now = clock();
+      scrub.value = String(length ? Math.round(now / length * 1000) : 0);
+      time.textContent = now.toFixed(1) + " / " + length.toFixed(1) + " s";
+    };
+    const label = () => { play.innerHTML = playing() ? pauseLabel : playLabel; };
+    const seek = (seconds) => videos.forEach((video) => {
+      const end = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : length;
+      video.currentTime = Math.min(seconds, Math.max(0, end - 0.05));
+    });
+    const setRate = () => videos.forEach((video) => {
+      video.defaultPlaybackRate = state.rate;
+      video.playbackRate = state.rate;
+    });
+    setRate();
+    for (const video of videos) {
+      video.addEventListener("timeupdate", show);
+      for (const type of ["play", "pause", "ended"]) video.addEventListener(type, label);
+    }
+    play.addEventListener("click", () => {
+      if (playing()) {
+        videos.forEach((video) => video.pause());
+        label();
+        return;
+      }
+      seek(finished() ? 0 : clock());
+      for (const video of videos) {
+        const started = video.play?.();
+        if (started?.catch) started.catch(() => label());
+      }
+      label();
+    });
+    const jump = (seconds) => {
+      seek(Math.min(length, Math.max(0, clock() + seconds)));
+      show();
+    };
+    scrub.addEventListener("input", () => {
+      seek(Number(scrub.value) / 1000 * length);
+      show();
+    });
+    // Arrow keys on the bar move both recordings by the skip step, not 1/1000 of the clip.
+    scrub.addEventListener("keydown", (event) => {
+      const step = { ArrowLeft: -SKIP_SECONDS, ArrowDown: -SKIP_SECONDS, ArrowRight: SKIP_SECONDS, ArrowUp: SKIP_SECONDS }[event.key];
+      if (step === undefined) return;
+      event.preventDefault();
+      jump(step);
+    });
+    $$(".sync-skip", bar).forEach((button) => button.addEventListener("click", () => jump(Number(button.dataset.skip))));
+    $(".sync-speed", bar).addEventListener("click", (event) => {
+      const button = event.target.closest("[data-rate]");
+      if (!button) return;
+      state.rate = Number(button.dataset.rate);
+      setRate();
+      $$("[data-rate]", bar).forEach((item) => item.setAttribute("aria-checked", String(Number(item.dataset.rate) === state.rate)));
+    });
   }
 
   function selectExample(id, focus = false) {
@@ -126,18 +229,21 @@
       if (selected && focus) tab.focus();
     });
     $("#rollout-panel").setAttribute("aria-labelledby", "example-tab-" + id);
-    $("#rollout-id").textContent = "TASK " + padded(id) + " · " + example.shortTitle.toUpperCase();
+    $("#rollout-id").textContent = "Task " + padded(id) + " · " + example.shortTitle;
     $("#rollout-instruction").textContent = "“" + example.instruction + "”";
     const personas = example.personas.slice(0, 2);
     $("#rollout-pair").innerHTML = personas.map((persona, index) => rolloutCase(example, persona, index)).join("");
     const ready = personas.filter((persona) => safeUrl(persona.video)).length;
+    wireSync(example);
+    // Only missing videos need a status; a complete pair speaks for itself.
+    $(".video-status").hidden = ready === 2;
     $(".video-status").innerHTML = "<i></i> " + (ready === 2 ? "Paired videos available" : ready === 1 ? "1 of 2 videos available" : "Videos coming soon");
     const recordingNote = $("#rollout-recording-note");
     if (recordingNote) {
       recordingNote.textContent = "";
       if (example.recording && ready) {
-        const label = example.recording.model === "gpt-6-astra" ? "Astra" : example.recording.model;
-        recordingNote.textContent = label + " · complete recorded episodes · 1× simulation playback; inference waits omitted.";
+        const playback = example.recording.playback ?? "complete recorded episodes · 1× simulation playback; inference waits omitted.";
+        recordingNote.textContent = playback.charAt(0).toUpperCase() + playback.slice(1);
         if (example.recording.recordedTaskId !== example.id) {
           recordingNote.textContent += " Recorded as Task " + example.recording.recordedTaskId + "; now Task " + example.id + ".";
         }
@@ -255,7 +361,8 @@
         }
       }
     }
-    $("#leaderboard-description").textContent = data.description || "Reported policy evaluations, with scoring criteria and coverage shown alongside each result.";
+    const description = $("#leaderboard-description");
+    if (description) description.textContent = data.description || "Reported policy evaluations, with scoring criteria and coverage shown alongside each result.";
     $("#leaderboard-boards").innerHTML = data.boards.map((board, index) => {
       const rows = [...board.rows].sort((a, b) => (b.scorePercent ?? -1) - (a.scorePercent ?? -1));
       const maximum = Math.max(0, ...rows.filter((row) => row.scorePercent !== null).map((row) => row.scorePercent));
@@ -276,7 +383,7 @@
         '<span class="visually-hidden">. Scale: 0 to ' + axisMax + ' percent.</span></figcaption><div class="leaderboard-chart-axis" aria-hidden="true"><div class="leaderboard-axis-track">' + tickMarkup + '</div></div><ol class="leaderboard-bars" role="list" aria-label="Policies ranked by ' + escape(board.metric) + '">' + chartRows +
         '</ol></figure></section>';
     }).join("");
-    $("#leaderboard-status").textContent = "Results snapshot" + (data.updated ? " · " + data.updated : "");
+    $("#leaderboard-status").textContent = data.updated ? "Results as of " + data.updated : "";
   }
 
   async function loadLeaderboard() {
@@ -300,7 +407,8 @@
       [state.tasks, state.examples] = await Promise.all(responses.map((response) => response.json()));
       if (state.tasks.length !== 100 || state.tasks.reduce((sum, task) => sum + task.personaCount, 0) !== 217) throw new Error("Catalog does not match the release");
       renderTasks();
-      selectExample(18);
+      renderRolloutTabs();
+      selectExample(state.examples.find((example) => example.recording)?.id ?? 18);
       return true;
     } catch {
       $("#task-count").textContent = "The interactive catalog is unavailable.";

@@ -129,7 +129,7 @@ test('all 100 task cards and dialogs use their own initial scene preview', async
     assert.match(task.preview.image, /^assets\/task-scenes\/task-\d{3}\.webp$/);
     assert.equal(button.querySelector('img').src, 'https://benchmark.test/' + task.preview.image);
     assert.equal(button.querySelector('img').alt, task.preview.alt);
-    assert.equal(button.querySelector('.task-preview-label').textContent, 'INITIAL SCENE');
+    assert.equal(button.querySelector('.task-preview-label'), null, 'cards carry no rollout-like badge');
     imagePaths.add(task.preview.image);
     button.click();
     assert.equal(ctx.$('.dialog-cover img').src, 'https://benchmark.test/' + task.preview.image);
@@ -137,6 +137,7 @@ test('all 100 task cards and dialogs use their own initial scene preview', async
     ctx.$('.dialog-close').click();
   }
   assert.equal(imagePaths.size, 100);
+  assert.match(ctx.$('.task-footer p').textContent, /starting scene, not a rollout/);
   ctx.window.close();
 });
 
@@ -160,7 +161,10 @@ test('rollout pairs are explicit placeholders and keyboard tabs work', async () 
   assert.equal(ctx.$$('.video-placeholder').length, 2);
   assert.equal(ctx.$$('video').length, 0);
   const tabs = ctx.$('.rollout-tabs');
-  for (const [key, expected] of [['ArrowRight', '51'], ['End', '68'], ['Home', '18'], ['ArrowLeft', '68']]) {
+  const recorded = examples.filter((item) => item.recording);
+  assert.equal(tabs.style.getPropertyValue('--tile-columns'), String(Math.ceil(recorded.length / 2)));
+  const last = String(recorded.at(-1).id);
+  for (const [key, expected] of [['ArrowRight', '51'], ['End', last], ['Home', '18'], ['ArrowLeft', last]]) {
     tabs.dispatchEvent(new ctx.window.KeyboardEvent('keydown', { key, bubbles: true }));
     const selected = ctx.$('[role="tab"][aria-selected="true"]');
     assert.equal(selected.dataset.example, expected);
@@ -221,10 +225,12 @@ test('unsafe video protocols never become source elements', async () => {
   }
 });
 
-test('shipped examples provide six complete paired recordings with distinct real-frame posters', async () => {
+test('shipped examples provide complete paired recordings with distinct real-frame posters', async () => {
   const ctx = await boot({ examples: shippedExamples });
   let count = 0;
-  for (const taskId of [18, 51, 68]) {
+  const recorded = shippedExamples.filter((item) => item.recording).map((item) => item.id);
+  assert.deepEqual(recorded.slice(0, 4), [18, 51, 68, 87]);
+  for (const taskId of recorded) {
     ctx.$('[data-example="' + taskId + '"]').click();
     const example = shippedExamples.find((item) => item.id === taskId);
     const videos = ctx.$$('video');
@@ -245,12 +251,98 @@ test('shipped examples provide six complete paired recordings with distinct real
       count++;
     }
     assert.ok(ctx.$('.video-status').textContent.includes('Paired videos available'));
-    assert.ok(ctx.$('#rollout-recording-note').textContent.includes('Astra'));
-    assert.ok(ctx.$('#rollout-recording-note').textContent.includes('1× simulation playback; inference waits omitted'));
+    assert.ok(ctx.$('#rollout-recording-note').textContent.startsWith('Complete recorded episode'));
+    assert.ok(ctx.$('#rollout-recording-note').textContent.includes('1× simulation playback'));
+    // The page shows no source labels (model or scripted); sources stay in the provenance file.
+    assert.equal(/Astra|Scripted|Model rollout/.test(ctx.$('#rollout-recording-note').textContent), false);
+    assert.equal(ctx.$('#rollout-recording-note').textContent.includes('inference waits omitted'), example.recording.kind === 'model');
     assert.equal(ctx.$('#rollout-recording-note a').href, 'https://benchmark.test/data/rollout-provenance.json');
     assert.equal(ctx.$('#rollout-recording-note').textContent.includes('Recorded as Task 110; now Task 51.'), taskId === 51);
   }
-  assert.equal(count, 6);
+  assert.equal(count, recorded.length * 2);
+  ctx.window.close();
+});
+
+test('rollout tabs are built from recorded examples without source labels', async () => {
+  const ctx = await boot({ examples: shippedExamples });
+  const tabs = ctx.$$('.rollout-tabs [role="tab"]');
+  const recorded = shippedExamples.filter((item) => item.recording);
+  assert.deepEqual(tabs.map((tab) => tab.dataset.example), recorded.map((item) => String(item.id)));
+  assert.deepEqual(tabs.slice(0, 4).map((tab) => tab.querySelector('span').textContent), ['Drink selection', 'Pressing style', 'Transfer method', 'Volume level']);
+  for (const [index, tab] of tabs.entries()) {
+    const example = recorded[index];
+    const model = example.recording.kind === 'model';
+    // Model recordings carry an overlay, so their tiles show the clean initial scene.
+    assert.equal(tab.querySelector('img').getAttribute('src'), 'https://benchmark.test/' + (model ? example.poster : example.personas[0].videoPoster));
+    assert.equal(tab.dataset.kind, undefined);
+    assert.equal(tab.textContent, example.tabLabel ?? example.shortTitle);
+  }
+  assert.equal(tabs[0].getAttribute('aria-selected'), 'true');
+  assert.equal(ctx.$('#rollout-source'), null);
+  assert.equal(ctx.$('.rollout-legend'), null);
+  ctx.$('[data-example="87"]').click();
+  assert.ok(ctx.$('#rollout-recording-note').textContent.startsWith('Complete recorded episode'));
+  ctx.window.close();
+});
+
+function fakeMedia(video, duration) {
+  let time = 0;
+  let paused = true;
+  Object.defineProperty(video, 'duration', { configurable: true, get: () => duration });
+  Object.defineProperty(video, 'currentTime', { configurable: true, get: () => time, set: (value) => { time = value; } });
+  Object.defineProperty(video, 'paused', { configurable: true, get: () => paused });
+  Object.defineProperty(video, 'ended', { configurable: true, get: () => false });
+  video.play = () => { paused = false; return Promise.resolve(); };
+  video.pause = () => { paused = true; };
+}
+
+test('synchronized controls play, scrub and speed up both personas on one clock', async () => {
+  const ctx = await boot({ examples: shippedExamples });
+  const bar = ctx.$('#rollout-sync');
+  assert.equal(bar.hidden, false);
+  const [a, b] = ctx.$$('#rollout-pair video');
+  fakeMedia(a, 96.9);
+  fakeMedia(b, 92.8);
+  a.currentTime = 10;
+  ctx.$('.sync-play').click();
+  assert.equal(a.paused, false);
+  assert.equal(b.paused, false);
+  assert.equal(b.currentTime, 10, 'the second persona joins the shared clock');
+  assert.ok(ctx.$('.sync-play').textContent.includes('Pause both'));
+  ctx.$('.sync-play').click();
+  assert.equal(a.paused && b.paused, true);
+  const scrub = ctx.$('.sync-scrub');
+  scrub.value = '1000';
+  scrub.dispatchEvent(new ctx.window.Event('input', { bubbles: true }));
+  assert.ok(Math.abs(a.currentTime - 96.85) < 0.06);
+  assert.ok(Math.abs(b.currentTime - 92.75) < 0.001, 'the shorter recording holds its last frame');
+  scrub.value = '500';
+  scrub.dispatchEvent(new ctx.window.Event('input', { bubbles: true }));
+  assert.ok(Math.abs(a.currentTime - 48.45) < 0.06 && Math.abs(b.currentTime - 48.45) < 0.06, 'dragging to the middle moves both');
+  ctx.$('.sync-skip[data-skip="5"]').click();
+  assert.ok(Math.abs(a.currentTime - 53.45) < 0.06 && Math.abs(b.currentTime - 53.45) < 0.06);
+  ctx.$('.sync-skip[data-skip="-5"]').click();
+  ctx.$('.sync-skip[data-skip="-5"]').click();
+  assert.ok(Math.abs(a.currentTime - 43.45) < 0.06 && Math.abs(b.currentTime - 43.45) < 0.06);
+  scrub.dispatchEvent(new ctx.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  assert.ok(Math.abs(a.currentTime - 48.45) < 0.06, 'arrow keys skip by the same step');
+  ctx.$('[data-rate="8"]').click();
+  assert.equal(a.playbackRate, 8);
+  ctx.$('[data-rate="4"]').click();
+  assert.equal(a.playbackRate, 4);
+  assert.equal(b.playbackRate, 4);
+  assert.equal(ctx.$('[data-rate="4"]').getAttribute('aria-checked'), 'true');
+  assert.equal(ctx.$$('.sync-speed [aria-checked="true"]').length, 1);
+  ctx.$('[data-example="87"]').click();
+  assert.deepEqual(ctx.$$('#rollout-pair video').map((video) => video.playbackRate), [4, 4], 'speed carries over to the next pair');
+  assert.ok(ctx.$('.sync-time').textContent.endsWith('/ 12.0 s'));
+  ctx.window.close();
+});
+
+test('synchronized controls stay hidden until both videos exist', async () => {
+  const ctx = await boot();
+  assert.equal(ctx.$('#rollout-sync').hidden, true);
+  assert.equal(ctx.$$('.sync-play').length, 0);
   ctx.window.close();
 });
 
@@ -360,7 +452,7 @@ test('leaderboard ranks only within each scoring criterion without a settings pa
   assert.match(ctx.$('.leaderboard-board').textContent, /Goal, process and fidelity must pass/);
   assert.equal(ctx.$('.leaderboard-protocols'), null);
   assert.doesNotMatch(ctx.$('#leaderboard-boards').textContent, /Evaluation settings & coverage/);
-  assert.match(ctx.$('#leaderboard-status').textContent, /2026-10-25/);
+  assert.equal(ctx.$('#leaderboard-status').textContent, 'Results as of 2026-10-25');
   assert.ok(ctx.$('figure.leaderboard-chart figcaption'));
   assert.ok(ctx.$('.leaderboard-bars[role="list"]'));
   assert.equal(ctx.$('#leaderboard a[download]'), null);
@@ -441,15 +533,13 @@ test('published policy snapshot renders reported scores without settings panels 
 });
 
 
-test('leaderboard appears between the hero and section 01, with navigation in page order', async () => {
+test('leaderboard appears between the hero and the overview, with navigation in page order', async () => {
   const ctx = await boot();
   const sections = [...ctx.$('main').children].filter((node) => node.tagName === 'SECTION');
   assert.ok(sections[0].classList.contains('hero'));
   assert.equal(sections[1].id, 'leaderboard');
   assert.equal(sections[2].id, 'overview');
-  assert.match(ctx.$('#overview .eyebrow').textContent, /^01 /);
-  assert.equal(ctx.$('#leaderboard .eyebrow').textContent, 'POLICY RESULTS');
-  assert.match(ctx.$('#resources .eyebrow').textContent, /^05 /);
+  assert.equal(ctx.$$('.eyebrow').length, 0, 'section headings carry no numbered micro-labels');
   for (const nav of ctx.$$('.desktop-nav, .mobile-nav')) assert.equal(nav.querySelector('a').getAttribute('href'), '#leaderboard');
   ctx.window.close();
 });

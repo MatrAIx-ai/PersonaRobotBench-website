@@ -9,9 +9,12 @@ The public research website for the **100-task / 217-persona** benchmark.
 
 This public repository contains the website, its complete task catalog,
 100 task-specific scene previews, and the policy leaderboard. The homepage
-includes six complete recorded Astra episodes: A/B pairs for Tasks 18, 51 and 68.
-Videos play at their original simulation rate with inference waits omitted;
-they are selected demonstrations rather than a benchmark success-rate estimate.
+includes 16 recorded A/B persona pairs (32 videos): Astra model rollouts for
+Tasks 18, 51 and 68; scripted reference episodes for Tasks 17, 19 and 87; and
+walking scripted-expert episodes for Tasks 1, 2, 4, 5, 10, 11, 37, 39, 52 and 70.
+Controller sources are recorded in the provenance data. At 1×, videos follow
+simulation time, with Astra inference waits omitted. These selected
+demonstrations are separate from the benchmark success-rate evaluations.
 See [recording provenance](data/rollout-provenance.json) for source hashes,
 recording context and the historical Task 110 → Task 51 mapping.
 
@@ -48,8 +51,9 @@ built-in token; contributors do not configure deployment credentials.
 
 ## Add or replace rollout videos
 
-Edit `data/examples.json`. The homepage has matched A/B videos for Tasks 18, 51
-and 68. Set each persona's `video` field, for example:
+Edit `data/examples.json`. Every example with a `recording` block gets a thumbnail
+tile in the rollout section, in file order, labelled by its `tabLabel`. Set each
+persona's `video` field, for example:
 
 ~~~json
 {
@@ -65,8 +69,19 @@ and 68. Set each persona's `video` field, for example:
 2. Set the corresponding `personas[].video`; supply both A and B for a paired comparison.
 3. Set `videoPoster` to a real frame from that recording, update its duration,
    and include captions for speech. Keep the static scene poster separate.
-4. Update `data/rollout-provenance.json` with the recording source and hashes.
-5. Run the checks above and open a PR against `website`.
+4. Set the example's `recording`: `source` (a key of `sources` in
+   `data/rollout-provenance.json`), `label` (must equal that source's metadata
+   label), `kind` (`model` for a policy rollout, `scripted` for a scripted
+   controller or expert), `playback` (the note under the videos) and `recordedTaskId`.
+5. Add one receipt per persona to `data/rollout-provenance.json` with the same
+   `source`, the recording facts and the video and poster hashes. Never label a
+   scripted demonstration as a model rollout.
+6. Run the checks above and open a PR against `website`.
+
+The rollout section plays both personas on one simulation clock (play, scrub,
+1×/2×/4×/8×); the shorter recording holds its last frame. Use the ±5 s buttons
+or the arrow keys while the scrubber has focus to seek both videos. Each video
+keeps its own native controls.
 
 Missing videos keep their placeholders. Playback uses `personas[].video`, not
 the reserved top-level `video` field. Host large recordings externally to keep
@@ -111,8 +126,9 @@ The leaderboard follows the latest paper snapshot and displays each evaluated
 policy configuration separately. Its metric is task-balanced strict success:
 average scored trials within each observed persona, then personas within each
 task, then all 100 tasks equally. Infrastructure outcomes remain unscored.
-Coverage and trial budgets are shown because the configurations use different
-protocols. Gemini remains pending until its strict-result report is available.
+Coverage and trial budgets are recorded in the result data because the
+configurations use different protocols. Gemini remains pending until its
+strict-result report is available.
 
 Update `data/leaderboard.json` and `data/leaderboard-results.json` together when
 new results arrive. Preserve the paper revision, metric, settings, scored and
@@ -124,10 +140,10 @@ assessments; paper points and archived assessments retain their own provenance.
 ## Branch ownership
 
 `MatrAIx-ai/PersonaRobotBench-website:website` is the public contribution and
-deployment source. The organization benchmark repository `MatrAIx-ai/PersonaRobotBench` also has a
-`website` branch. That private source branch is not an automatic mirror:
-maintainers should bring future public website changes into it explicitly when
-needed. Do not merge the website branch into benchmark `main`.
+deployment source. The benchmark repository `MatrAIx-ai/PersonaRobotBench` also
+has a `website` branch. It is synchronized explicitly with the public website
+source; there is no automatic cross-repository mirror. Do not merge the website
+branch into benchmark `main`.
 
 This website has no backend, analytics, model calls or simulator processes.
 Keep API keys, credentials, local outputs and runtime files outside this repository.
