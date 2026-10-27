@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import re
 from collections import defaultdict
 from fractions import Fraction
@@ -86,6 +87,21 @@ def verify_leaderboard(root: Path, tasks: list[dict]) -> int:
             assert config["taskBalancedSuccessPercent"] is None
             assert next(row for row in rows if row["id"] == config["id"])["scorePercent"] is None
             continue
+        if config["status"] == "paper_snapshot":
+            # This figure-only point has no matching trial-count bundle. Bind
+            # it to the inspected paper asset rather than inventing counts.
+            assert config["id"] == "gemini4"
+            display = next(row for row in rows if row["id"] == config["id"])
+            assert config["taskBalancedSuccessPercent"] == display["scorePercent"] == 30.4
+            assert config["sourceCommit"] == data["provenance"]["paperCommit"] == "e2293166876ea2410f0d3a82fe5513e5df71feaf"
+            assert config["sourceFigure"] == data["provenance"]["paperFigure"] == "CoRL Late Breaking Results/figures/policy_leaderboard.pdf"
+            assert config["sourceSha256"] == data["provenance"]["paperFigureSha256"] == evidence["source"]["paperFigureSha256"] == "faed740590b96505c721989c1bdba6c2fe48e18a3727551c066a96123250a63e"
+            assert all(config[key] is None for key in ("taskBalancedRateExact", "strictSuccesses", "scored", "observedPersonas", "ci95Percent"))
+            assert config["personaCounts"] == [] and config["currentTrialCountsVerified"] is False
+            assert config["planned"] == 2170 and config["trialsPerPersona"] == 10
+            assert config["reasoningEffort"] == "medium"
+            continue
+        assert config["status"] in {"verified_strict", "archived_strict"}, "Unknown leaderboard evidence status"
         counts = config["personaCounts"]
         assert len(counts) == len(expected_cases) == 217
         assert {(item["task"], item["persona"]) for item in counts} == expected_cases
@@ -107,6 +123,56 @@ def verify_leaderboard(root: Path, tasks: list[dict]) -> int:
     # Displayed points follow the paper; archived trial evidence has its own
     # exact rates. Do not silently substitute one for the other.
     return len(rows)
+
+
+def verify_recorded_pose_receipt(item: dict, source: dict, recording: dict) -> None:
+    """Check model-demo evidence and the measured-pose playback contract."""
+    assert source["kind"] == "model_rollout" and recording["kind"] == "model"
+    for key in ("model", "reasoningEffort"):
+        assert item[key] == source[key] == recording[key] and item[key], key
+    scores = item["nativeScores"]
+    assert all(scores[key] is True for key in
+               ("physics", "personalized_success", "process_valid", "faithful", "strict_success"))
+    assert scores["evaluation_fixture"] is False and scores["timeout"] is False
+    assert scores["controller_error"] is None and scores["process_preference_success"] is not False
+    assert item["nativeRescorePassed"] and item["sourceOriginalsUnchanged"]
+    assert item["completeRecordedEpisode"] and item["sourceReportedSuccess"]
+    assert item["sourceArtifactsGitTracked"] is False, "Locally retained source artifacts must not be presented as Git-tracked"
+    assert item["physicsStepsDuringRender"] == item["newModelCallsDuringRender"] == 0
+    assert item["modelObservationVideo"] is False
+    assert type(item["inferenceCalls"]) is int and item["inferenceCalls"] > 0
+    limit = item["simulationTimeLimitSeconds"]
+    assert limit == source["simulationTimeLimitSeconds"] and 0 < item["simulatedSeconds"] <= limit
+    fps, sample_hz, record_hz = item["fps"], item["renderSampleHz"], item["recordedStateHz"]
+    assert all(type(value) in (int, float) and math.isfinite(value) and value > 0
+               for value in (fps, sample_hz, record_hz, limit))
+    assert fps == source["outputFrameRateHz"] and sample_hz == source["renderSampleHz"]
+    assert record_hz == source["recordedStateHz"]
+    stride = round(record_hz / sample_hz)
+    assert stride > 0 and abs(stride * sample_hz - record_hz) < 1e-9
+    last_row = round(item["simulatedSeconds"] * record_hz)
+    expected_samples = last_row // stride + 1 + int(bool(last_row % stride))
+    assert item["renderedSamples"] == expected_samples, "Measured-pose sample count differs"
+    assert abs(item["frames"] / fps - item["durationSeconds"]) < 1e-6, "Video clock differs from frame count"
+    assert abs(item["durationSeconds"] - item["simulatedSeconds"] - 1 / fps) < 1e-6, "Final-frame hold differs"
+    for key in ("sourceEpisodeSha256", "sourceReportSha256", "sourceStatusSha256",
+                "sourceFrameManifestSha256", "timeLimitVariantSha256"):
+        assert re.fullmatch(r"[0-9a-f]{64}", item[key]), key
+    assert item["sourceModelReceiptHashes"] and all(
+        re.fullmatch(r"[0-9a-f]{64}", value) for value in item["sourceModelReceiptHashes"].values())
+    def public_values(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                public_values(key)
+                public_values(child)
+        elif isinstance(value, list):
+            for child in value:
+                public_values(child)
+        elif isinstance(value, str):
+            assert not value.startswith(("/home/", "/Users/", "file:", "http://127.0.0.1", "http://localhost")), "Local path leaked into public evidence"
+            assert not re.match(r"^[A-Za-z]:[\\/]", value), "Local path leaked into public evidence"
+    public_values(item)
+    public_values(source)
 
 
 def verify(root: Path) -> dict[str, int | str]:
@@ -230,6 +296,8 @@ def verify(root: Path) -> dict[str, int | str]:
                 if not persona.get("video"):
                     continue
                 receipt = records[(example["id"], persona["id"])]
+                if receipt.get("captureMode") == "recorded_pose_replay":
+                    verify_recorded_pose_receipt(receipt, sources[receipt["source"]], example["recording"])
                 assert receipt["video"] == persona["video"], "Video URL differs from receipt"
                 assert receipt["poster"] == persona["videoPoster"], "Poster URL differs from receipt"
                 assert receipt["recordedTaskId"] == example["recording"]["recordedTaskId"], "Historical task ID differs"

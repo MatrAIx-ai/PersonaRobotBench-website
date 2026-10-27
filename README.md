@@ -5,17 +5,20 @@ The public research website for the **100-task / 217-persona** benchmark.
 - **Live website:** https://matraix-ai.github.io/PersonaRobotBench-website/
 - **Contribute:** fork this repository and open a pull request targeting **`website`**.
 - **Contribution guide:** [CONTRIBUTING.md](CONTRIBUTING.md)
-- **Benchmark:** [HHD000EXE/PersonaRobotBench](https://github.com/HHD000EXE/PersonaRobotBench), currently private. Its code and linked technical guides require repository access.
+- **Benchmark:** [MatrAIx-ai/PersonaRobotBench](https://github.com/MatrAIx-ai/PersonaRobotBench), currently private. Its code and linked technical guides require repository access.
 
 This public repository contains the website, its complete task catalog,
-100 task-specific scene previews, and the policy leaderboard. The homepage
-includes 18 recorded A/B persona pairs (36 videos): Astra model rollouts for
-Tasks 18, 51 and 68; scripted reference episodes for Tasks 17, 19 and 87; and
-walking scripted-expert episodes for Tasks 1, 2, 4, 5, 9, 10, 11, 37, 39, 52, 57
-and 70. Task 1 is shown first.
+100 task-specific scene previews, and the policy leaderboard. The homepage includes 40 recorded task comparisons (84 persona videos), preserving all
+existing model and scripted demonstrations and every authored persona slot.
+The latest Astra high batch covers Tasks 34, 89, 32, 100, 14, 33, 3, 59, 83, 84.
+Task 1 is shown first.
 Controller sources are recorded in the provenance data. At 1×, videos follow
 simulation time, with Astra inference waits omitted. These selected
 demonstrations are separate from the benchmark success-rate evaluations.
+The new high-reasoning demos use a 180-second simulation allowance and native
+success checks. Their videos replay measured poses sampled at 15 Hz and held
+at 30 fps; provenance describes the privileged skill interface, assisted control,
+renderer, retained source-artifact hashes and timing.
 See [recording provenance](data/rollout-provenance.json) for source hashes,
 recording context and the historical Task 110 → Task 51 mapping.
 
@@ -67,7 +70,7 @@ persona's `video` field, for example:
 ~~~
 
 1. Add a browser-compatible MP4/WebM to `assets/rollouts/`, or use an HTTPS video URL.
-2. Set the corresponding `personas[].video`; supply both A and B for a paired comparison.
+2. Set each authored persona's `personas[].video`, including C or D when present.
 3. Set `videoPoster` to a real frame from that recording, update its duration,
    and include captions for speech. Keep the static scene poster separate.
 4. Set the example's `recording`: `source` (a key of `sources` in
@@ -79,9 +82,9 @@ persona's `video` field, for example:
    scripted demonstration as a model rollout.
 6. Run the checks above and open a PR against `website`.
 
-The rollout section plays both personas on one simulation clock (play, scrub,
+The rollout section plays all available personas on one simulation clock (play, scrub,
 1×/2×/4×/8×); the shorter recording holds its last frame. Use the ±5 s buttons
-or the arrow keys while the scrubber has focus to seek both videos. Each video
+or the arrow keys while the scrubber has focus to seek all videos. Each video
 keeps its own native controls.
 
 Missing videos keep their placeholders. Playback uses `personas[].video`, not
@@ -94,6 +97,8 @@ this source repository small.
 | --- | --- |
 | `index.html` | Page copy, sections, links and evaluation context |
 | `styles.css` | Responsive layout and typography |
+| `assets/persona-concept.svg`, `assets/persona-concept-mobile.svg` | User profile → preference inference → robot action concept figure, with a separate phone layout |
+| `tools/build_concept_figure.py` | Rebuild both concept figures from a symmetric grid and the shared Task 1 initial layout |
 | `app.js` | Search, category filters, task details, tabs and video playback |
 | `data/tasks.json` | All 100 task descriptions and 217 task-local persona cases |
 | `assets/task-scenes/` | One current initial-scene preview for every task |
@@ -121,6 +126,22 @@ exporter refuses to overwrite this complete preview catalog.
 
 Normal website edits and deployments do not need the private benchmark checkout.
 
+To edit the overview concept, update `tools/build_concept_figure.py` and run
+`python3 tools/build_concept_figure.py`. Both SVG layouts share one grid-based
+source; all Before views reuse the same initial-desk symbol. No simulator or
+additional Python packages are needed.
+
+The overview appears immediately after the title and release statistics, before
+the leaderboard. Its Task 1 environment and optional 3D viewer share one panel
+with the concept figure. The illustrated profile contains only dominant hand;
+identical instructions enter one policy that infers a computer-work preference,
+plans and executes. Object labels are embedded in the desk views.
+Small robot nodes sit on the Before-to-After transitions. A shared planner
+connection reaches a central junction and branches to the two examples. Both
+robot icons represent executions of the same G1. Instructions are single-line;
+the phone layout shares one instruction row inside the user-input block.
+The broader preference dimensions are described in the figure caption.
+
 ## Policy leaderboard
 
 The leaderboard follows the latest paper snapshot and displays each evaluated
@@ -128,8 +149,8 @@ policy configuration separately. Its metric is task-balanced strict success:
 average scored trials within each observed persona, then personas within each
 task, then all 100 tasks equally. Infrastructure outcomes remain unscored.
 Coverage and trial budgets are recorded in the result data because the
-configurations use different protocols. Gemini remains pending until its
-strict-result report is available.
+configurations use different protocols. Gemini 4 uses the current CoRL paper
+figure (30.4%); its current per-trial counts are not included in this archive.
 
 Update `data/leaderboard.json` and `data/leaderboard-results.json` together when
 new results arrive. Preserve the paper revision, metric, settings, scored and

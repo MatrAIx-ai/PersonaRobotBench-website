@@ -17,7 +17,7 @@ if not (ROOT / "scripts/task_registry.py").is_file():
 sys.path.insert(0, str(ROOT / "scripts"))
 from task_registry import ALL_TASKS
 
-REPO = "https://github.com/HHD000EXE/PersonaRobotBench/blob/main/"
+REPO = "https://github.com/MatrAIx-ai/PersonaRobotBench/blob/main/"
 CATEGORIES = {
     "Food & dining": {5,9,17,18,26,40,46,60,63,70,75,76,77,78,79,91,93,94,97,99},
     "Workspace": {1,3,14,16,20,25,30,33,34,37,38,39,42,45,49,50,51,52,53,54,55,56,59,61,65,74,82,83,84,85,86,87,89,100},
